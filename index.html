@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>J.A.R.V.I.S. 5D Sensory Core + GPS</title>
+  
+  <!-- Estilos base e iconos -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #020509;
+      font-family: 'Segoe UI', Roboto, -apple-system, sans-serif;
+      color: #00f0ff;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* HUD Interface Overlay */
+    .hud-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+    }
+
+    .interactive {
+      pointer-events: auto;
+    }
+
+    /* Header Panel */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(4, 16, 32, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(0, 240, 255, 0.2);
+      border-radius: 16px;
+      padding: 12px 24px;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.15);
+    }
+
+    .logo {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: 3px;
+      text-shadow: 0 0 10px #00f0ff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-badge {
+      font-size: 0.75rem;
+      background: rgba(0, 240, 255, 0.1);
+      border: 1px solid #00f0ff;
+      padding: 4px 10px;
+      border-radius: 20px;
+      letter-spacing: 1px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 5px #00f0ff; }
+      50% { opacity: 0.4; box-shadow: 0 0 0px #00f0ff; }
+    }
+
+    /* Floating Control Bar (Sensory Actions & GPS) */
+    .sensory-controls {
+      position: absolute;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .btn-hud {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(4, 16, 32, 0.7);
+      border: 1px solid rgba(0, 240, 255, 0.4);
+      color: #00f0ff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.2rem;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    }
+
+    .btn-hud:hover, .btn-hud:active {
+      transform: scale(1.15);
+      background: rgba(0, 240, 255, 0.25);
+      border-color: #00f0ff;
+      box-shadow: 0 0 25px #00f0ff;
+    }
+
+    .btn-hud.active {
+      background: #00f0ff;
+      color: #020509;
+      box-shadow: 0 0 30px #00f0ff;
+    }
+
+    /* Bottom Voice & Command Center */
+    .bottom-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .voice-trigger-container {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .mic-btn {
+      width: 75px;
+      height: 75px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 240, 255, 0.3) 0%, rgba(4, 16, 32, 0.9) 70%);
+      border: 2px solid #00f0ff;
+      color: #00f0ff;
+      font-size: 1.8rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.4);
+      transition: all 0.3s ease;
+    }
+
+    .mic-btn.listening {
+      background: radial-gradient(circle, rgba(255, 0, 85, 0.4) 0%, rgba(32, 4, 16, 0.9) 70%);
+      border-color: #ff0055;
+      color: #ff0055;
+      animation: micPulse 1.2s infinite;
+    }
+
+    @keyframes micPulse {
+      0% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.7); }
+      70% { box-shadow: 0 0 0 25px rgba(255, 0, 85, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0); }
+    }
+
+    .chat-box {
+      width: 100%;
+      background: rgba(4, 16, 32, 0.75);
+      backdrop-filter: blur(15px);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      border-radius: 20px;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    .chat-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #ffffff;
+      font-size: 0.95rem;
+    }
+
+    .chat-input::placeholder {
+      color: rgba(0, 240, 255, 0.5);
+    }
+
+    .send-btn {
+      background: transparent;
+      border: none;
+      color: #00f0ff;
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+
+    /* Output Terminal Modal */
+    .terminal-response {
+      position: absolute;
+      left: 20px;
+      top: 90px;
+      max-width: 380px;
+      background: rgba(4, 16, 32, 0.85);
+      backdrop-filter: blur(15px);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      border-radius: 16px;
+      padding: 16px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      color: #e0ffff;
+      box-shadow: 0 0 20px rgba(0,240,255,0.2);
+      transform: translateX(-120%);
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .terminal-response.visible {
+      transform: translateX(0);
+    }
+
+    /* GPS Coordinates Overlay Box */
+    .gps-overlay-box {
+      position: absolute;
+      right: 90px;
+      top: 20px;
+      background: rgba(4, 16, 32, 0.8);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: 0.8rem;
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .gps-overlay-box span {
+      color: #ff0055;
+      font-weight: bold;
+    }
+
+    /* Country / Location Card */
+    .country-card {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      opacity: 0;
+      pointer-events: none;
+      background: rgba(2, 10, 25, 0.95);
+      border: 2px solid #00f0ff;
+      border-radius: 20px;
+      padding: 24px;
+      width: 300px;
+      text-align: center;
+      transition: all 0.3s ease;
+      z-index: 100;
+      box-shadow: 0 0 40px rgba(0, 240, 255, 0.4);
+    }
+
+    .country-card.active {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .country-card h3 {
+      font-size: 1.5rem;
+      margin-bottom: 10px;
+      color: #ffffff;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .country-card p {
+      font-size: 0.9rem;
+      color: #8ab4f8;
+      margin-bottom: 15px;
+    }
+
+    .close-card-btn {
+      background: #00f0ff;
+      color: #020509;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 12px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+
+  <!-- Libraries: Three.js, GSAP -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <div class="hud-overlay">
+    <!-- Header -->
+    <div class="header interactive">
+      <div class="logo">
+        <i class="fa-solid fa-atom fa-spin"></i> J.A.R.V.I.S. 5D
+      </div>
+      <div class="status-badge" id="status-badge">ONLINE</div>
+    </div>
+
+    <!-- GPS Live Box -->
+    <div class="gps-overlay-box interactive" id="gps-box">
+      <div>GPS: <span id="gps-status">Escaneando satélites...</span></div>
+      <div>LAT/LON: <span id="gps-coords">--.--, --.--</span></div>
+    </div>
+
+    <!-- Terminal Response Display -->
+    <div class="terminal-response interactive" id="terminal-box">
+      <strong>J.A.R.V.I.S. Systems:</strong>
+      <p id="terminal-text">Núcleo sensorial activo. Módulo GPS satelital enlazado.</p>
+    </div>
+
+    <!-- Country / Location Card -->
+    <div class="country-card interactive" id="country-card">
+      <h3 id="country-title">Ubicación</h3>
+      <p id="country-desc">Datos de geolocalización obtenidos.</p>
+      <button class="close-card-btn" id="close-card-btn">CERRAR</button>
+    </div>
+
+    <!-- Sensory Right Controls -->
+    <div class="sensory-controls interactive">
+      <button class="btn-hud" id="btn-gps-locate" title="Centrar GPS en mi Posición"><i class="fa-solid fa-location-crosshairs"></i></button>
+      <button class="btn-hud" id="btn-mode" title="Cambiar a Modo Globo 3D"><i class="fa-solid fa-earth-americas"></i></button>
+      <button class="btn-hud" id="btn-dissolve" title="Disolver / Reensamblar"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+      <button class="btn-hud" id="btn-app-connect" title="Conectar App/Teléfono"><i class="fa-solid fa-mobile-screen-button"></i></button>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div class="bottom-bar interactive">
+      <div class="voice-trigger-container">
+        <button class="mic-btn" id="mic-btn">
+          <i class="fa-solid fa-microphone"></i>
+        </button>
+      </div>
+
+      <div class="chat-box">
+        <input type="text" class="chat-input" id="chat-input" placeholder="Pregunta algo a JARVIS o pide tu ubicación..." />
+        <button class="send-btn" id="send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================
+       1. SCENE & RENDERER SETUP (THREE.JS)
+       ========================================================= */
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 7;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    /* =========================================================
+       2. 5D SENSORY CORE & GPS GLOBE
+       ========================================================= */
+    const coreGroup = new THREE.Group();
+    scene.add(coreGroup);
+
+    // Particle Sphere Parameters
+    const particleCount = 4000;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const originalPositions = new Float32Array(particleCount * 3);
+
+    const radius = 2.2;
+    for (let i = 0; i < particleCount; i++) {
+      const phi = Math.acos(-1 + (2 * i) / particleCount);
+      const theta = Math.sqrt(particleCount * Math.PI) * phi;
+
+      const x = radius * Math.cos(theta) * Math.sin(phi);
+      const y = radius * Math.sin(theta) * Math.sin(phi);
+      const z = radius * Math.cos(phi);
+
+      positions[i * 3] = x;
+      positions[i * 3 + 1] = y;
+      positions[i * 3 + 2] = z;
+
+      originalPositions[i * 3] = x;
+      originalPositions[i * 3 + 1] = y;
+      originalPositions[i * 3 + 2] = z;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const createParticleTexture = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(0, 240, 255, 1)');
+      grad.addColorStop(0.3, 'rgba(0, 240, 255, 0.6)');
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(canvas);
+    };
+
+    const particleMaterial = new THREE.PointsMaterial({
+      size: 0.08,
+      map: createParticleTexture(),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+
+    const particleSystem = new THREE.Points(geometry, particleMaterial);
+    coreGroup.add(particleSystem);
+
+    // Globe Wireframe & Hotspots
+    const globeGeo = new THREE.SphereGeometry(2.18, 32, 32);
+    const globeMat = new THREE.MeshBasicMaterial({
+      wireframe: true,
+      color: 0x00f0ff,
+      transparent: true,
+      opacity: 0.2
+    });
+    const globeMesh = new THREE.Mesh(globeGeo, globeMat);
+    coreGroup.add(globeMesh);
+
+    const hotspotsGroup = new THREE.Group();
+    coreGroup.add(hotspotsGroup);
+
+    let userGpsMarker = null;
+
+    function latLonToVector3(lat, lon, radius) {
+      const phi = (90 - lat) * (Math.PI / 180);
+      const theta = (lon + 180) * (Math.PI / 180);
+      const x = -(radius * Math.sin(phi) * Math.cos(theta));
+      const z = radius * Math.sin(phi) * Math.sin(theta);
+      const y = radius * Math.cos(phi);
+      return new THREE.Vector3(x, y, z);
+    }
+
+    /* =========================================================
+       3. GPS REAL-TIME INTEGRATION
+       ========================================================= */
+    function initGPS() {
+      if ("geolocation" in navigator) {
+        document.getElementById('gps-status').innerText = "Adquiriendo satélites...";
+        navigator.geolocation.watchPosition((position) => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          
+          document.getElementById('gps-status').innerText = "Conectado";
+          document.getElementById('gps-coords').innerText = `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+
+          // Remove previous marker if exists
+          if (userGpsMarker) hotspotsGroup.remove(userGpsMarker);
+
+          // Add User GPS Live Pin on Sphere
+          const pos = latLonToVector3(lat, lon, 2.22);
+          const markerGeo = new THREE.SphereGeometry(0.08, 16, 16);
+          const markerMat = new THREE.MeshBasicMaterial({ color: 0x00ff66 });
+          userGpsMarker = new THREE.Mesh(markerGeo, markerMat);
+          userGpsMarker.position.copy(pos);
+          userGpsMarker.userData = { name: "Tu Ubicación GPS Actual", desc: `Latitud: ${lat}, Longitud: ${lon}` };
+          hotspotsGroup.add(userGpsMarker);
+
+        }, (error) => {
+          document.getElementById('gps-status').innerText = "Simulado (GPS Denegado)";
+          document.getElementById('gps-coords').innerText = "40.46, -3.74";
+        }, { enableHighAccuracy: true });
+      } else {
+        document.getElementById('gps-status').innerText = "No soportado";
+      }
+    }
+    initGPS();
+
+    // Additional global hotspots
+    const countries = [
+      { name: "Nueva York", lat: 40.71, lon: -74.00, desc: "Nodo América del Norte." },
+      { name: "Londres", lat: 51.50, lon: -0.12, desc: "Centro de Datos Principal." },
+      { name: "Tokio", lat: 35.67, lon: 139.65, desc: "Estación Neural Asiatica." }
+    ];
+
+    countries.forEach(c => {
+      const pos = latLonToVector3(c.lat, c.lon, 2.22);
+      const markerGeo = new THREE.SphereGeometry(0.06, 16, 16);
+      const markerMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+      const marker = new THREE.Mesh(markerGeo, markerMat);
+      marker.position.copy(pos);
+      marker.userData = c;
+      hotspotsGroup.add(marker);
+    });
+
+    /* =========================================================
+       4. TOUCH & SENSORY INTERACTION (ANDROID)
+       ========================================================= */
+    let isDragging = false;
+    let previousTouchPosition = { x: 0, y: 0 };
+    let isDissolved = false;
+    let isGlobeMode = false;
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    function onPointerDown(e) {
+      isDragging = true;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      previousTouchPosition = { x: clientX, y: clientY };
+
+      mouse.x = (clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObjects(hotspotsGroup.children);
+      if (intersects.length > 0) {
+        const data = intersects[0].object.userData;
+        showLocationCard(data);
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!isDragging) return;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+      const deltaX = clientX - previousTouchPosition.x;
+      const deltaY = clientY - previousTouchPosition.y;
+
+      coreGroup.rotation.y += deltaX * 0.005;
+      coreGroup.rotation.x += deltaY * 0.005;
+
+      previousTouchPosition = { x: clientX, y: clientY };
+    }
+
+    function onPointerUp() {
+      isDragging = false;
+    }
+
+    window.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', onPointerUp);
+
+    window.addEventListener('touchstart', onPointerDown);
+    window.addEventListener('touchmove', onPointerMove);
+    window.addEventListener('touchend', onPointerUp);
+
+    /* =========================================================
+       5. ANIMATION LOOP
+       ========================================================= */
+    let clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const time = clock.getElapsedTime();
+
+      if (!isDragging) {
+        coreGroup.rotation.y += 0.003;
+      }
+
+      const posAttr = geometry.attributes.position;
+      for (let i = 0; i < particleCount; i++) {
+        const x = originalPositions[i * 3];
+        const y = originalPositions[i * 3 + 1];
+        const z = originalPositions[i * 3 + 2];
+
+        if (isDissolved) {
+          posAttr.array[i * 3] += Math.sin(time + i) * 0.02;
+          posAttr.array[i * 3 + 1] += Math.cos(time + i) * 0.02;
+          posAttr.array[i * 3 + 2] += Math.sin(time * 0.5 + i) * 0.02;
+        } else {
+          const factor = 1 + Math.sin(time * 2 + i * 0.1) * 0.02;
+          posAttr.array[i * 3] = x * factor;
+          posAttr.array[i * 3 + 1] = y * factor;
+          posAttr.array[i * 3 + 2] = z * factor;
+        }
+      }
+      posAttr.needsUpdate = true;
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Dissolve / Rebuild Animation
+    function toggleDissolve() {
+      const posAttr = geometry.attributes.position;
+      isDissolved = !isDissolved;
+
+      for (let i = 0; i < particleCount; i++) {
+        const targetX = isDissolved ? (Math.random() - 0.5) * 12 : originalPositions[i * 3];
+        const targetY = isDissolved ? (Math.random() - 0.5) * 12 : originalPositions[i * 3 + 1];
+        const targetZ = isDissolved ? (Math.random() - 0.5) * 12 : originalPositions[i * 3 + 2];
+
+        gsap.to(posAttr.array, {
+          [i * 3]: targetX,
+          [i * 3 + 1]: targetY,
+          [i * 3 + 2]: targetZ,
+          duration: 1.8,
+          ease: "power2.inOut",
+          onUpdate: () => posAttr.needsUpdate = true
+        });
+      }
+
+      showTerminalResponse(isDissolved ? "Desensamblando matriz de partículas..." : "Reensamblando Core Sensorial GPS JARVIS.");
+    }
+
+    /* =========================================================
+       6. VOICE SYNTHESIS & RECOGNITION (JARVIS VOICE)
+       ========================================================= */
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'es-ES';
+      recognition.continuous = false;
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('chat-input').value = transcript;
+        handleUserQuery(transcript);
+      };
+
+      recognition.onend = () => {
+        document.getElementById('mic-btn').classList.remove('listening');
+      };
+    }
+
+    function speakJARVIS(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'es-ES';
+        utterance.rate = 1.0;
+        utterance.pitch = 0.95;
+
+        gsap.to(coreGroup.scale, { x: 1.15, y: 1.15, z: 1.15, duration: 0.3, yoyo: true, repeat: 5 });
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    /* =========================================================
+       7. AI ENGINE & UI HANDLERS
+       ========================================================= */
+    async function queryGeminiAI(promptText) {
+      showTerminalResponse("Procesando consulta neuronal...");
+      try {
+        const reply = await simulateJarvisAI(promptText);
+        showTerminalResponse(reply);
+        speakJARVIS(reply);
+      } catch (err) {
+        showTerminalResponse("Error de conexión neuronal con la IA.");
+      }
+    }
+
+    function simulateJarvisAI(query) {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          const q = query.toLowerCase();
+          if (q.includes("gps") || q.includes("ubicación") || q.includes("donde estoy")) {
+            resolve("Módulo GPS activo. Tu ubicación satelital ha sido marcada en la esfera holográfica en color verde.");
+          } else if (q.includes("conectar") || q.includes("teléfono")) {
+            resolve("Dispositivos móviles y red de aplicaciones enlazados correctamente.");
+          } else {
+            resolve(`Instrucción procesada: "${query}". Todos los sistemas operan al 100%, señor.`);
+          }
+        }, 1000);
+      });
+    }
+
+    function handleUserQuery(text) {
+      if (!text.trim()) return;
+      queryGeminiAI(text);
+      document.getElementById('chat-input').value = '';
+    }
+
+    const terminalBox = document.getElementById('terminal-box');
+    const terminalText = document.getElementById('terminal-text');
+
+    function showTerminalResponse(msg) {
+      terminalText.innerText = msg;
+      terminalBox.classList.add('visible');
+    }
+
+    const countryCard = document.getElementById('country-card');
+    function showLocationCard(data) {
+      document.getElementById('country-title').innerText = data.name;
+      document.getElementById('country-desc').innerText = data.desc;
+      countryCard.classList.add('active');
+      speakJARVIS(`Ubicación seleccionada: ${data.name}.`);
+    }
+
+    document.getElementById('close-card-btn').addEventListener('click', () => {
+      countryCard.classList.remove('active');
+    });
+
+    // Event Listeners
+    document.getElementById('btn-dissolve').addEventListener('click', toggleDissolve);
+    
+    document.getElementById('btn-gps-locate').addEventListener('click', () => {
+      gsap.to(coreGroup.rotation, { x: 0, y: 0, duration: 1.5, ease: "power2.out" });
+      showTerminalResponse("Centrando vista GPS en la posición actual del usuario.");
+      speakJARVIS("Vista centrada en tu ubicación GPS.");
+    });
+
+    document.getElementById('btn-mode').addEventListener('click', () => {
+      isGlobeMode = !isGlobeMode;
+      gsap.to(globeMat, { opacity: isGlobeMode ? 0.6 : 0.2, duration: 1 });
+      showTerminalResponse(isGlobeMode ? "Modo Globo GPS 3D activado." : "Modo Core Sensorial activado.");
+    });
+
+    document.getElementById('btn-app-connect').addEventListener('click', () => {
+      showTerminalResponse("Sincronizando con dispositivo Android y red de apps...");
+      speakJARVIS("Sincronización con el teléfono completada.");
+    });
+
+    document.getElementById('mic-btn').addEventListener('click', () => {
+      if (!recognition) {
+        alert("El reconocimiento de voz no está soportado en este navegador.");
+        return;
+      }
+      const micBtn = document.getElementById('mic-btn');
+      micBtn.classList.add('listening');
+      recognition.start();
+    });
+
+    document.getElementById('send-btn').addEventListener('click', () => {
+      const val = document.getElementById('chat-input').value;
+      handleUserQuery(val);
+    });
+
+    document.getElementById('chat-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        const val = document.getElementById('chat-input').value;
+        handleUserQuery(val);
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
